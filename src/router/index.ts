@@ -35,6 +35,10 @@ const router = createRouter({
       path: '/clients',
       component: () => import('../views/ClientManagementView.vue'),
     },
+    {
+      path: '/accounts/new',
+      component: () => import('../views/CreateAccountView.vue'),
+    },
     ...clientRoutes,
   ],
 })
