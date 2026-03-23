@@ -336,9 +336,25 @@ onMounted(() => {
             <span style="color:#64748b">Rezervisana sredstva</span>
             <span style="color:#0f172a">0,00 {{ detailsAccount.currencyKod }}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px">
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
             <span style="color:#64748b">Stanje računa</span>
             <span style="font-weight:700;color:#0f172a">{{ formatAmount(detailsAccount.stanje, detailsAccount.currencyKod) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Dnevna potrošnja</span>
+            <span style="color:#0f172a">{{ formatAmount(detailsAccount.dnevnaPotrosnja ?? 0, detailsAccount.currencyKod) }}
+              <span style="color:#94a3b8;font-size:12px"> / {{ formatAmount(detailsAccount.dnevniLimit, detailsAccount.currencyKod) }}</span>
+            </span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Mesečna potrošnja</span>
+            <span style="color:#0f172a">{{ formatAmount(detailsAccount.mesecnaPotrosnja ?? 0, detailsAccount.currencyKod) }}
+              <span style="color:#94a3b8;font-size:12px"> / {{ formatAmount(detailsAccount.mesecniLimit, detailsAccount.currencyKod) }}</span>
+            </span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px">
+            <span style="color:#64748b">Datum isteka</span>
+            <span style="color:#0f172a">{{ detailsAccount.datumIsteka ? new Date(detailsAccount.datumIsteka).toLocaleDateString('sr-RS') : '—' }}</span>
           </div>
         </div>
 

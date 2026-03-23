@@ -13,6 +13,9 @@ export interface ClientAccountItem {
   raspolozivoStanje: number
   dnevniLimit: number
   mesecniLimit: number
+  dnevnaPotrosnja: number
+  mesecnaPotrosnja: number
+  datumIsteka: string | null
   naziv: string
   status: string
 }
