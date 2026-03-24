@@ -48,6 +48,10 @@ export const clientRoutes: RouteRecordRaw[] = [
         path: 'loans/new',
         component: () => import('../views/client/ClientNewLoanView.vue'),
       },
+      {
+        path: 'cards',
+        component: () => import('../views/client/ClientCardsView.vue'),
+      },
     ],
   },
 ]

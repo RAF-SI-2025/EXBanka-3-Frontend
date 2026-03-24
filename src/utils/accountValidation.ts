@@ -14,7 +14,7 @@ export function validateAccountNumber(broj: string): boolean {
 
   let sum = 0
   for (let i = 0; i < 16; i++) {
-    sum += parseInt(digits[i]) * weights[i]
+    sum += parseInt(digits.charAt(i)) * weights[i]!
   }
 
   const control = parseInt(digits.slice(16))

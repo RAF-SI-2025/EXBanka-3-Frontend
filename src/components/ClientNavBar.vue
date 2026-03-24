@@ -22,6 +22,7 @@ function logout() {
       <RouterLink to="/client/recipients" style="color:#93c5fd;font-size:14px;text-decoration:none" active-class="navbar-nav-active">Primaoci</RouterLink>
       <RouterLink to="/client/payments" style="color:#93c5fd;font-size:14px;text-decoration:none" active-class="navbar-nav-active">Plaćanja</RouterLink>
       <RouterLink to="/client/loans" style="color:#93c5fd;font-size:14px;text-decoration:none" active-class="navbar-nav-active">Krediti</RouterLink>
+      <RouterLink to="/client/cards" style="color:#93c5fd;font-size:14px;text-decoration:none" active-class="navbar-nav-active">Kartice</RouterLink>
     </div>
     <div class="navbar-right">
       <span class="navbar-user">

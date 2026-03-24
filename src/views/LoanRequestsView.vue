@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { employeeLoanApi, type Loan } from '../api/employeeLoan'
-import { LOAN_TYPES, LOAN_STATUS_LABELS } from '../api/loan'
+import { LOAN_TYPES } from '../api/loan'
 
 const auth = useAuthStore()
 
