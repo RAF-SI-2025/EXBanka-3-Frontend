@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useClientAccountStore } from '../../stores/clientAccount'
 import { useTransferStore } from '../../stores/transfer'
@@ -14,6 +14,15 @@ const transferStore = useTransferStore()
 const step = ref<'form' | 'confirm' | 'verify' | 'success'>('form')
 const verifyCode = ref('')
 const verifyError = ref('')
+const verifySecondsLeft = ref(300)
+const codeExpired = ref(false)
+let verifyTimerInterval: ReturnType<typeof setInterval> | null = null
+
+const verifyCountdown = computed(() => {
+  const m = Math.floor(verifySecondsLeft.value / 60)
+  const s = verifySecondsLeft.value % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+})
 
 const form = ref({
   fromAccountId: (route.query.fromAccountId as string) || '',
@@ -103,11 +112,44 @@ async function handleVerify() {
   }
 }
 
+function startVerifyTimer() {
+  verifySecondsLeft.value = 300
+  codeExpired.value = false
+  if (verifyTimerInterval) clearInterval(verifyTimerInterval)
+  verifyTimerInterval = setInterval(() => {
+    if (verifySecondsLeft.value > 0) {
+      verifySecondsLeft.value--
+    } else {
+      codeExpired.value = true
+      clearInterval(verifyTimerInterval!)
+      verifyTimerInterval = null
+    }
+  }, 1000)
+}
+
+watch(step, (newStep) => {
+  if (newStep === 'verify') {
+    startVerifyTimer()
+  } else {
+    if (verifyTimerInterval) {
+      clearInterval(verifyTimerInterval)
+      verifyTimerInterval = null
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (verifyTimerInterval) clearInterval(verifyTimerInterval)
+})
+
 function startNew() {
   form.value = { fromAccountId: '', toAccountId: '', iznos: '', svrha: '' }
   exchangePreview.value = null
   verifyCode.value = ''
   verifyError.value = ''
+  if (verifyTimerInterval) { clearInterval(verifyTimerInterval); verifyTimerInterval = null }
+  verifySecondsLeft.value = 300
+  codeExpired.value = false
   step.value = 'form'
 }
 
@@ -276,6 +318,10 @@ onMounted(async () => {
         <div v-else-if="step === 'verify'" class="tf-verify">
           <div class="tf-verify-icon">✉</div>
           <p class="tf-verify-text">Unesite verifikacioni kod koji ste primili emailom.</p>
+          <div class="tf-countdown" :class="{ 'tf-countdown-expired': codeExpired }">
+            <span v-if="!codeExpired">Kod ističe za: <strong>{{ verifyCountdown }}</strong></span>
+            <span v-else>Kod je istekao.</span>
+          </div>
           <div class="tf-field">
             <label>Verifikacioni kod</label>
             <input
@@ -283,6 +329,7 @@ onMounted(async () => {
               type="text"
               maxlength="6"
               placeholder="6-cifreni kod"
+              :disabled="codeExpired"
               @keyup.enter="handleVerify"
             />
           </div>
@@ -291,7 +338,7 @@ onMounted(async () => {
             <button class="tf-btn tf-btn-sec" @click="step = 'form'">Otkaži</button>
             <button
               class="tf-btn"
-              :disabled="verifyCode.length !== 6"
+              :disabled="verifyCode.length !== 6 || codeExpired"
               @click="handleVerify"
             >Verifikuj transfer</button>
           </div>
@@ -395,7 +442,14 @@ onMounted(async () => {
 /* Verify */
 .tf-verify { text-align: center; padding: 8px 0; }
 .tf-verify-icon { font-size: 40px; margin-bottom: 10px; }
-.tf-verify-text { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 20px; }
+.tf-verify-text { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 12px; }
+.tf-countdown {
+  font-size: 13px; color: rgba(255,255,255,0.6);
+  margin-bottom: 16px; padding: 6px 12px;
+  background: rgba(255,255,255,0.08); border-radius: 6px; display: inline-block;
+}
+.tf-countdown strong { color: #93c5fd; font-size: 15px; }
+.tf-countdown-expired { background: rgba(239,68,68,0.2); color: #fca5a5; }
 
 /* Success */
 .tf-success { text-align: center; padding: 32px 0; }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useClientAuthStore } from '../../stores/clientAuth'
 import { useClientAccountStore } from '../../stores/clientAccount'
@@ -35,6 +35,41 @@ const createdPayment = ref<PaymentItem | null>(null)
 const verificationCode = ref('')
 const verifyError = ref('')
 const formError = ref('')
+const verifySecondsLeft = ref(300)
+const codeExpired = ref(false)
+let verifyTimerInterval: ReturnType<typeof setInterval> | null = null
+
+const verifyCountdown = computed(() => {
+  const m = Math.floor(verifySecondsLeft.value / 60)
+  const s = verifySecondsLeft.value % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+})
+
+function startVerifyTimer() {
+  verifySecondsLeft.value = 300
+  codeExpired.value = false
+  if (verifyTimerInterval) clearInterval(verifyTimerInterval)
+  verifyTimerInterval = setInterval(() => {
+    if (verifySecondsLeft.value > 0) {
+      verifySecondsLeft.value--
+    } else {
+      codeExpired.value = true
+      clearInterval(verifyTimerInterval!)
+      verifyTimerInterval = null
+    }
+  }, 1000)
+}
+
+watch(step, (newStep) => {
+  if (newStep === 'verify') {
+    startVerifyTimer()
+  } else {
+    if (verifyTimerInterval) {
+      clearInterval(verifyTimerInterval)
+      verifyTimerInterval = null
+    }
+  }
+})
 const showLimitInfo = ref(false)
 const addRecipientSuccess = ref(false)
 const addingRecipient = ref(false)
@@ -138,8 +173,15 @@ function startNew() {
   formError.value = ''
   createdPayment.value = null
   addRecipientSuccess.value = false
+  if (verifyTimerInterval) { clearInterval(verifyTimerInterval); verifyTimerInterval = null }
+  verifySecondsLeft.value = 300
+  codeExpired.value = false
   step.value = 'form'
 }
+
+onUnmounted(() => {
+  if (verifyTimerInterval) clearInterval(verifyTimerInterval)
+})
 
 onMounted(async () => {
   if (clientId.value) {
@@ -282,18 +324,23 @@ onMounted(async () => {
       <div v-else-if="step === 'verify'">
         <div class="pay-section-label">Verifikacija</div>
         <p class="pay-subtitle">Unesite 6-cifreni verifikacioni kod za potvrdu plaćanja.</p>
+        <div class="pay-countdown" :class="{ 'pay-countdown-expired': codeExpired }">
+          <span v-if="!codeExpired">Kod ističe za: <strong>{{ verifyCountdown }}</strong></span>
+          <span v-else>Kod je istekao.</span>
+        </div>
         <div class="pay-field">
           <input
             v-model="verificationCode"
             type="text" maxlength="6" placeholder="• • • • • •"
             class="pay-code-input"
+            :disabled="codeExpired"
             @keyup.enter="handleVerify"
           />
         </div>
         <div v-if="verifyError" class="pay-error">{{ verifyError }}</div>
         <div class="pay-actions">
           <button class="pay-btn pay-btn-sec" @click="step = 'confirm'">Nazad</button>
-          <button class="pay-btn pay-btn-primary" :disabled="verificationCode.length !== 6" @click="handleVerify">
+          <button class="pay-btn pay-btn-primary" :disabled="verificationCode.length !== 6 || codeExpired" @click="handleVerify">
             Potvrdi kod
           </button>
         </div>
@@ -412,6 +459,15 @@ onMounted(async () => {
 .pay-summary-row span:first-child { color: #64748b; }
 .pay-summary-row span:last-child { font-weight: 500; color: #0f172a; }
 .pay-summary-highlight span:last-child { font-size: 18px; font-weight: 700; color: #2563eb; }
+
+/* Countdown */
+.pay-countdown {
+  text-align: center; font-size: 14px; color: #475569;
+  margin-bottom: 16px; padding: 8px 14px;
+  background: #f8fafc; border-radius: 8px;
+}
+.pay-countdown strong { color: #2563eb; font-size: 16px; }
+.pay-countdown-expired { background: #fef2f2; color: #dc2626; }
 
 /* Code input */
 .pay-code-input {

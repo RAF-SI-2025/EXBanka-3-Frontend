@@ -62,6 +62,19 @@ const mockPayment = {
   vremeTransakcije: '2026-03-01T10:00:00Z',
 }
 
+async function goToVerifyStep(wrapper: ReturnType<typeof mount>) {
+  vi.mocked(paymentApi.create).mockResolvedValueOnce({ data: { payment: mockPayment } })
+  const selects = wrapper.findAll('select')
+  // selects[0]=savedRecipientId, selects[1]=sifraPlacanja, selects[2]=fromAccountId
+  await selects[2].setValue('1')
+  await selects[0].setValue('10')
+  await wrapper.find('input[type="number"]').setValue('5000')
+  await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Struja')
+  await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
+  await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
+  await flushPromises()
+}
+
 describe('ClientNewPaymentView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -98,18 +111,18 @@ describe('ClientNewPaymentView', () => {
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
     expect(wrapper.text()).toContain('EPS')
-    expect(wrapper.text()).toContain('Sačuvani primalac')
+    expect(wrapper.text()).toContain('Iz liste')
   })
 
   it('switching to manual mode shows account number input', async () => {
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
 
-    const manualRadio = wrapper.find('input[value="manual"]')
-    await manualRadio.setValue(true)
+    const manualBtn = wrapper.findAll('button').find(b => b.text() === 'Ručni unos')!
+    await manualBtn.trigger('click')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('input[placeholder="Broj računa primaoca"]').exists()).toBe(true)
+    expect(wrapper.find('input[placeholder="Broj računa primaoca (18 cifara)"]').exists()).toBe(true)
   })
 
   it('shows šifra plaćanja dropdown', async () => {
@@ -119,12 +132,12 @@ describe('ClientNewPaymentView', () => {
     expect(wrapper.text()).toContain('289')
   })
 
-  it('shows validation error when form incomplete and Dalje clicked', async () => {
+  it('shows validation error when form incomplete and Nastavi clicked', async () => {
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
 
-    await wrapper.find('button.btn-primary').trigger('click')
-    expect(wrapper.text()).toContain('Izaberite izvorni račun')
+    await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
+    expect(wrapper.text()).toContain('Izaberite račun platioca')
   })
 
   it('moves to confirm step when form is filled', async () => {
@@ -132,8 +145,9 @@ describe('ClientNewPaymentView', () => {
     await flushPromises()
 
     const selects = wrapper.findAll('select')
-    await selects[0].setValue('1')         // fromAccountId
-    await selects[1].setValue('10')        // savedRecipientId
+    // selects[0]=savedRecipientId, selects[1]=sifraPlacanja, selects[2]=fromAccountId
+    await selects[2].setValue('1')
+    await selects[0].setValue('10')
 
     const iznosInput = wrapper.find('input[type="number"]')
     await iznosInput.setValue('5000')
@@ -141,9 +155,9 @@ describe('ClientNewPaymentView', () => {
     const svrhaInput = wrapper.find('input[placeholder="Svrha plaćanja"]')
     await svrhaInput.setValue('Struja')
 
-    await wrapper.find('button.btn-primary').trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
 
-    expect(wrapper.text()).toContain('Pregled plaćanja')
+    expect(wrapper.text()).toContain('Pregled naloga')
     expect(wrapper.text()).toContain('999999999999999999')
     expect(wrapper.text()).toContain('Struja')
   })
@@ -153,81 +167,60 @@ describe('ClientNewPaymentView', () => {
     await flushPromises()
 
     const selects = wrapper.findAll('select')
-    await selects[0].setValue('1')
-    await selects[1].setValue('10')
+    await selects[2].setValue('1')
+    await selects[0].setValue('10')
     await wrapper.find('input[type="number"]').setValue('100')
     await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Test')
-    await wrapper.find('button.btn-primary').trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
 
-    expect(wrapper.text()).toContain('Pregled plaćanja')
+    expect(wrapper.text()).toContain('Pregled naloga')
     await wrapper.findAll('button').find(b => b.text() === 'Nazad')!.trigger('click')
-    expect(wrapper.text()).toContain('Sa računa')
+    expect(wrapper.text()).toContain('Račun platioca')
   })
 
   it('Potvrdi calls create API and moves to verify step', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({ data: { payment: mockPayment } })
-
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    await selects[0].setValue('1')
-    await selects[1].setValue('10')
-    await wrapper.find('input[type="number"]').setValue('5000')
-    await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Struja')
-    await wrapper.find('button.btn-primary').trigger('click')
-
-    await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
-    await flushPromises()
+    await goToVerifyStep(wrapper)
 
     expect(paymentApi.create).toHaveBeenCalledOnce()
-    expect(wrapper.text()).toContain('Verifikacija plaćanja')
+    expect(wrapper.text()).toContain('Verifikacija')
     expect(wrapper.text()).toContain('6-cifreni')
   })
 
+  it('verify step shows countdown timer starting at 5:00', async () => {
+    const wrapper = mount(ClientNewPaymentView)
+    await flushPromises()
+    await goToVerifyStep(wrapper)
+
+    expect(wrapper.text()).toContain('5:00')
+  })
+
   it('Potvrdi kod with correct code moves to success', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({ data: { payment: mockPayment } })
     vi.mocked(paymentApi.verify).mockResolvedValueOnce({
       data: { payment: { ...mockPayment, status: 'uspesno' } },
     })
 
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    await selects[0].setValue('1')
-    await selects[1].setValue('10')
-    await wrapper.find('input[type="number"]').setValue('5000')
-    await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Struja')
-    await wrapper.find('button.btn-primary').trigger('click')
-    await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
-    await flushPromises()
+    await goToVerifyStep(wrapper)
 
     await wrapper.find('input[maxlength="6"]').setValue('123456')
     await wrapper.findAll('button').find(b => b.text() === 'Potvrdi kod')!.trigger('click')
     await flushPromises()
 
     expect(paymentApi.verify).toHaveBeenCalledWith('p1', '123456')
-    expect(wrapper.text()).toContain('uspešno realizovano')
+    expect(wrapper.text()).toContain('uspešno realizovana')
   })
 
   it('wrong verification code shows error', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({ data: { payment: mockPayment } })
     vi.mocked(paymentApi.verify).mockRejectedValueOnce({
       response: { data: { message: 'Neispravan kod' } },
     })
 
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    await selects[0].setValue('1')
-    await selects[1].setValue('10')
-    await wrapper.find('input[type="number"]').setValue('5000')
-    await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Struja')
-    await wrapper.find('button.btn-primary').trigger('click')
-    await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
-    await flushPromises()
+    await goToVerifyStep(wrapper)
 
     await wrapper.find('input[maxlength="6"]').setValue('000000')
     await wrapper.findAll('button').find(b => b.text() === 'Potvrdi kod')!.trigger('click')
@@ -237,27 +230,18 @@ describe('ClientNewPaymentView', () => {
   })
 
   it('success step has Novo plaćanje button that resets form', async () => {
-    vi.mocked(paymentApi.create).mockResolvedValueOnce({ data: { payment: mockPayment } })
     vi.mocked(paymentApi.verify).mockResolvedValueOnce({
       data: { payment: { ...mockPayment, status: 'uspesno' } },
     })
 
     const wrapper = mount(ClientNewPaymentView)
     await flushPromises()
-
-    const selects = wrapper.findAll('select')
-    await selects[0].setValue('1')
-    await selects[1].setValue('10')
-    await wrapper.find('input[type="number"]').setValue('5000')
-    await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Struja')
-    await wrapper.find('button.btn-primary').trigger('click')
-    await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
-    await flushPromises()
+    await goToVerifyStep(wrapper)
     await wrapper.find('input[maxlength="6"]').setValue('123456')
     await wrapper.findAll('button').find(b => b.text() === 'Potvrdi kod')!.trigger('click')
     await flushPromises()
 
     await wrapper.findAll('button').find(b => b.text() === 'Novo plaćanje')!.trigger('click')
-    expect(wrapper.text()).toContain('Sa računa')
+    expect(wrapper.text()).toContain('Račun platioca')
   })
 })
