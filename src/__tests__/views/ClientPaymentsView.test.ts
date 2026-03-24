@@ -229,4 +229,46 @@ describe('ClientPaymentsView', () => {
       expect.objectContaining({ status: 'uspesno' })
     )
   })
+
+  it('shows min and max amount number inputs', async () => {
+    const wrapper = mount(ClientPaymentsView)
+    await flushPromises()
+    expect(wrapper.findAll('input[type="number"]')).toHaveLength(2)
+  })
+
+  it('setting min amount calls API with minAmount filter', async () => {
+    vi.mocked(paymentApi.listByClient).mockResolvedValue({
+      data: { payments: [], total: 0 },
+    })
+
+    const wrapper = mount(ClientPaymentsView)
+    await flushPromises()
+
+    const numberInputs = wrapper.findAll('input[type="number"]')
+    await numberInputs[0].setValue('1000')
+    await numberInputs[0].trigger('change')
+    await flushPromises()
+
+    expect(paymentApi.listByClient).toHaveBeenCalledWith('5',
+      expect.objectContaining({ minAmount: 1000 })
+    )
+  })
+
+  it('setting max amount calls API with maxAmount filter', async () => {
+    vi.mocked(paymentApi.listByClient).mockResolvedValue({
+      data: { payments: [], total: 0 },
+    })
+
+    const wrapper = mount(ClientPaymentsView)
+    await flushPromises()
+
+    const numberInputs = wrapper.findAll('input[type="number"]')
+    await numberInputs[1].setValue('5000')
+    await numberInputs[1].trigger('change')
+    await flushPromises()
+
+    expect(paymentApi.listByClient).toHaveBeenCalledWith('5',
+      expect.objectContaining({ maxAmount: 5000 })
+    )
+  })
 })

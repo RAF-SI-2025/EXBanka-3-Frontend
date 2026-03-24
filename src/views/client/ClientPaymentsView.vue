@@ -13,7 +13,7 @@ const paymentStore = usePaymentStore()
 const clientId = computed(() => String(clientAuthStore.client?.id ?? ''))
 
 const selectedPayment = ref<PaymentItem | null>(null)
-const filter = ref({ status: '', dateFrom: '', dateTo: '' })
+const filter = ref({ status: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '' })
 
 async function applyFilter() {
   paymentStore.page = 1
@@ -21,6 +21,8 @@ async function applyFilter() {
     status: filter.value.status || undefined,
     dateFrom: filter.value.dateFrom || undefined,
     dateTo: filter.value.dateTo || undefined,
+    minAmount: filter.value.minAmount ? Number(filter.value.minAmount) : undefined,
+    maxAmount: filter.value.maxAmount ? Number(filter.value.maxAmount) : undefined,
   })
 }
 
@@ -127,6 +129,14 @@ onMounted(async () => {
       <div class="pv-date-group">
         <label>Do</label>
         <input v-model="filter.dateTo" type="date" @change="applyFilter" />
+      </div>
+      <div class="pv-date-group">
+        <label>Min iznos</label>
+        <input v-model="filter.minAmount" type="number" min="0" placeholder="0" @change="applyFilter" />
+      </div>
+      <div class="pv-date-group">
+        <label>Max iznos</label>
+        <input v-model="filter.maxAmount" type="number" min="0" placeholder="∞" @change="applyFilter" />
       </div>
     </div>
 
