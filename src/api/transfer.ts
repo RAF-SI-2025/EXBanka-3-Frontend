@@ -62,10 +62,11 @@ export const transferApi = {
       svrha:               data.svrha,
     }),
 
-  verify: (transferId: string, verificationCode: string) =>
-    clientApi.post(`/transfers/${transferId}/verify`, {
-      verification_code: verificationCode,
-    }),
+  approve: (transferId: string) =>
+    clientApi.post(`/transfers/${transferId}/approve`, { mode: 'confirm' }),
+
+  reject: (transferId: string) =>
+    clientApi.post(`/transfers/${transferId}/reject`),
 
   listByClient: (clientId: string, filter: TransferFilter = {}) =>
     clientApi.get(`/transfers/client/${clientId}`, {

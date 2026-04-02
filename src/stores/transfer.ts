@@ -24,12 +24,22 @@ export const useTransferStore = defineStore('transfer', () => {
     }
   }
 
-  async function verifyTransfer(transferId: string, verificationCode: string): Promise<void> {
+  async function approveTransfer(transferId: string): Promise<void> {
     error.value = ''
     try {
-      await transferApi.verify(transferId, verificationCode)
+      await transferApi.approve(transferId)
     } catch (e: any) {
-      error.value = extractApiMessage(e) || 'Failed to verify transfer.'
+      error.value = extractApiMessage(e) || 'Failed to approve transfer.'
+      throw e
+    }
+  }
+
+  async function rejectTransfer(transferId: string): Promise<void> {
+    error.value = ''
+    try {
+      await transferApi.reject(transferId)
+    } catch (e: any) {
+      error.value = extractApiMessage(e) || 'Failed to reject transfer.'
       throw e
     }
   }
@@ -66,7 +76,7 @@ export const useTransferStore = defineStore('transfer', () => {
     error.value = ''
   }
 
-  return { transfers, total, page, pageSize, loading, error, createTransfer, verifyTransfer, fetchByClient, fetchByAccount, clearError }
+  return { transfers, total, page, pageSize, loading, error, createTransfer, approveTransfer, rejectTransfer, fetchByClient, fetchByAccount, clearError }
 })
 
 function extractApiMessage(error: any): string {
