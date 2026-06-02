@@ -28,6 +28,12 @@ jobs:
           # shared upstream repo). GHCR namespaces must be lowercase.
           OWNER="${{ github.repository_owner }}"
           OWNER="${OWNER,,}"
-          TAG="ghcr.io/${OWNER}/exbanka-3-frontend:latest"
-          docker build -t "$TAG" .
-          docker push "$TAG"
+          IMAGE="ghcr.io/${OWNER}/exbanka-3-frontend"
+          # Tag every build with the immutable 7-char commit SHA so deploys are
+          # traceable and rollback-able, and also move :latest to the same build
+          # so anything still pulling :latest keeps working.
+          SHA_TAG="${IMAGE}:${GITHUB_SHA::7}"
+          LATEST_TAG="${IMAGE}:latest"
+          docker build -t "$SHA_TAG" -t "$LATEST_TAG" .
+          docker push "$SHA_TAG"
+          docker push "$LATEST_TAG"
