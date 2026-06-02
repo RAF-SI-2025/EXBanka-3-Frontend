@@ -31,6 +31,7 @@ const SLUG_MAP: Array<[RegExp, string]> = [
   [/^\/api\/v1\/permissions(\/|$)/, 'employee'],
   [/^\/api\/v1\/employees(\/|$)/, 'employee'],
   [/^\/api\/v1\/actuaries(\/|$)/, 'employee'],
+  [/^\/api\/v1\/audit-logs(\/|$)/, 'employee'],
   [/^\/api\/v1\/clients(\/|$)/, 'client'],
   [/^\/api\/v1\/firme(\/|$)/, 'account'],
   [/^\/api\/v1\/sifre-delatnosti(\/|$)/, 'account'],
@@ -50,6 +51,8 @@ const SLUG_MAP: Array<[RegExp, string]> = [
   [/^\/api\/v1\/funds(\/|$)/, 'exchange'],
   [/^\/api\/v1\/exchanges(\/|$)/, 'exchange'],
   [/^\/api\/v1\/exchange(\/|$)/, 'exchange'],
+  [/^\/api\/v1\/watchlists(\/|$)/, 'exchange'],
+  [/^\/api\/v1\/price-alerts(\/|$)/, 'exchange'],
   [/^\/api\/v1\/loans(\/|$)/, 'loan'],
 ]
 
