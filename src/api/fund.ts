@@ -5,6 +5,17 @@
 import employeeApi from './client'
 import clientApi from './clientAuth'
 
+export type FundDividendPolicy = 'reinvest' | 'payout'
+
+export interface FundStatistics {
+  available: boolean
+  monthsOfData: number
+  annualizedReturn: number
+  volatility: number
+  rewardToVariability: number
+  maxDrawdown: number
+}
+
 export interface FundSummary {
   id: number
   naziv: string
@@ -13,6 +24,7 @@ export interface FundSummary {
   managerId: number
   accountId: number
   datumKreiranja: string
+  dividendPolicy: FundDividendPolicy
   fundValueRSD: number
   liquidCashRSD: number
   holdingsValueRSD: number
@@ -20,6 +32,26 @@ export interface FundSummary {
   profitRSD: number
   participantsCount: number
   withdrawalCommRate: number
+  statistics?: FundStatistics
+}
+
+export interface FundDividend {
+  id: number
+  assetId: number
+  ticker: string
+  period: string
+  quantity: number
+  grossRSD: number
+  policy: FundDividendPolicy
+  reinvestedShares: number
+  reinvestedRSD: number
+  distributedRSD: number
+  paidAt: string
+}
+
+export interface BenchmarkPoint {
+  date: string
+  indexValue: number
 }
 
 export interface FundHolding {
@@ -94,6 +126,21 @@ function fundApiFor(axiosInstance: typeof employeeApi) {
       axiosInstance.get<{ performance: FundPerformancePoint[]; count: number; granularity: string }>(
         `/funds/${id}/performance`,
         { params: { granularity } },
+      ),
+    statistics: (id: number) =>
+      axiosInstance.get<{ statistics: FundStatistics }>(`/funds/${id}/statistics`),
+    dividends: (id: number) =>
+      axiosInstance.get<{ dividends: FundDividend[]; count: number }>(`/funds/${id}/dividends`),
+    benchmark: () =>
+      axiosInstance.get<{ benchmark: BenchmarkPoint[]; count: number }>('/funds/benchmark'),
+    setDividendPolicy: (id: number, policy: FundDividendPolicy) =>
+      axiosInstance.put<{ fundId: number; dividendPolicy: FundDividendPolicy }>(
+        `/funds/${id}/dividend-policy`,
+        { policy },
+      ),
+    runDividends: () =>
+      axiosInstance.post<{ period: string; eligible: number; processed: number; skipped: number; failed: number }>(
+        '/funds/dividends/run',
       ),
     invest: (fundId: number, payload: InvestInFundPayload) =>
       axiosInstance.post(`/funds/${fundId}/invest`, payload),

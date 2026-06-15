@@ -10,8 +10,16 @@ const myPositions = ref<FundPositionView[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
 
-const sortKey = ref<'naziv' | 'value' | 'profit' | 'minimalni'>('naziv')
+type SortKey =
+  | 'naziv' | 'value' | 'profit' | 'minimalni'
+  | 'annualized' | 'rtv' | 'drawdown' | 'volatility'
+const sortKey = ref<SortKey>('naziv')
 const search = ref('')
+
+// Sort helper: funds without enough history sort last on metric columns.
+function metric(f: FundSummary, key: 'annualizedReturn' | 'rewardToVariability' | 'maxDrawdown' | 'volatility') {
+  return f.statistics?.available ? f.statistics[key] : Number.NEGATIVE_INFINITY
+}
 
 const filtered = computed(() => {
   let rows = [...funds.value]
@@ -24,11 +32,22 @@ const filtered = computed(() => {
       case 'value': return b.fundValueRSD - a.fundValueRSD
       case 'profit': return b.profitRSD - a.profitRSD
       case 'minimalni': return a.minimalniUlog - b.minimalniUlog
+      case 'annualized': return metric(b, 'annualizedReturn') - metric(a, 'annualizedReturn')
+      case 'rtv': return metric(b, 'rewardToVariability') - metric(a, 'rewardToVariability')
+      case 'drawdown': return metric(a, 'maxDrawdown') - metric(b, 'maxDrawdown') // lower is better
+      case 'volatility': return metric(a, 'volatility') - metric(b, 'volatility') // lower is better
       default: return a.naziv.localeCompare(b.naziv)
     }
   })
   return rows
 })
+
+function fmtPct(v: number) {
+  return `${(v * 100).toFixed(2)} %`
+}
+function fmtRatio(v: number) {
+  return v.toFixed(2)
+}
 
 async function load() {
   loading.value = true
@@ -74,6 +93,10 @@ onMounted(load)
           <option value="value">Sortiraj: vrednost</option>
           <option value="profit">Sortiraj: profit</option>
           <option value="minimalni">Sortiraj: minimalni ulog</option>
+          <option value="annualized">Sortiraj: godišnji prinos</option>
+          <option value="rtv">Sortiraj: prinos/rizik</option>
+          <option value="drawdown">Sortiraj: max drawdown</option>
+          <option value="volatility">Sortiraj: volatilnost</option>
         </select>
       </div>
       <div v-if="loading" class="hint">Ucitavam...</div>
@@ -81,19 +104,33 @@ onMounted(load)
         <thead>
           <tr>
             <th>Naziv</th>
-            <th>Opis</th>
             <th class="num">Vrednost (RSD)</th>
             <th class="num">Profit (RSD)</th>
+            <th class="num" title="Anualizovani prinos">God. prinos</th>
+            <th class="num" title="Reward-to-variability (prinos/rizik); više je bolje">Prinos/rizik</th>
+            <th class="num" title="Najveći pad od vrha do dna; niže je bolje">Max drawdown</th>
+            <th class="num" title="Anualizovana volatilnost mesečnih prinosa">Volatilnost</th>
             <th class="num">Min. ulog</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="f in filtered" :key="f.id" class="clickable" @click="openFund(f.id)">
-            <td><strong>{{ f.naziv }}</strong></td>
-            <td class="muted">{{ f.opis }}</td>
+            <td>
+              <strong>{{ f.naziv }}</strong>
+              <div class="muted desc">{{ f.opis }}</div>
+            </td>
             <td class="num">{{ f.fundValueRSD.toFixed(2) }}</td>
             <td class="num" :class="f.profitRSD >= 0 ? 'positive' : 'negative'">{{ f.profitRSD.toFixed(2) }}</td>
+            <template v-if="f.statistics?.available">
+              <td class="num" :class="f.statistics.annualizedReturn >= 0 ? 'positive' : 'negative'">{{ fmtPct(f.statistics.annualizedReturn) }}</td>
+              <td class="num">{{ fmtRatio(f.statistics.rewardToVariability) }}</td>
+              <td class="num negative">{{ fmtPct(f.statistics.maxDrawdown) }}</td>
+              <td class="num">{{ fmtPct(f.statistics.volatility) }}</td>
+            </template>
+            <template v-else>
+              <td class="num muted" colspan="4" title="Nedovoljno istorijskih podataka">—</td>
+            </template>
             <td class="num">{{ f.minimalniUlog.toFixed(2) }}</td>
             <td><button class="btn-primary" @click.stop="openFund(f.id)">Investiraj</button></td>
           </tr>
@@ -152,6 +189,7 @@ onMounted(load)
 .data-table tr.clickable { cursor: pointer; }
 .data-table tr.clickable:hover td { background: #f8fafc; }
 .muted { color: #64748b; }
+.desc { font-size: 12px; margin-top: 2px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .positive { color: #16a34a; }
 .negative { color: #dc2626; }
 .btn-primary { padding: 6px 14px; border-radius: 8px; border: none; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; font-size: 13px; }

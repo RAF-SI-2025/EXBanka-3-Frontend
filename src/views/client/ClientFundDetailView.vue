@@ -19,6 +19,9 @@ import {
   type FundSummary,
   type FundHolding,
   type FundPerformancePoint,
+  type FundStatistics,
+  type FundDividend,
+  type BenchmarkPoint,
 } from '../../api/fund'
 import { clientAccountApi } from '../../api/clientAccount'
 import { useClientAuthStore } from '../../stores/clientAuth'
@@ -34,6 +37,9 @@ const fund = ref<FundSummary | null>(null)
 const holdings = ref<FundHolding[]>([])
 const performance = ref<FundPerformancePoint[]>([])
 const granularity = ref<'monthly' | 'quarterly' | 'yearly'>('monthly')
+const statistics = ref<FundStatistics | null>(null)
+const dividends = ref<FundDividend[]>([])
+const benchmark = ref<BenchmarkPoint[]>([])
 
 const loading = ref(false)
 const errorMsg = ref('')
@@ -53,14 +59,20 @@ async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const [fundRes, holdingsRes, perfRes] = await Promise.all([
+    const [fundRes, holdingsRes, perfRes, statsRes, divRes, benchRes] = await Promise.all([
       clientFundApi.get(fundId.value),
       clientFundApi.holdings(fundId.value),
       clientFundApi.performance(fundId.value, granularity.value),
+      clientFundApi.statistics(fundId.value),
+      clientFundApi.dividends(fundId.value),
+      clientFundApi.benchmark(),
     ])
     fund.value = fundRes.data?.fund ?? null
     holdings.value = holdingsRes.data?.holdings ?? []
     performance.value = perfRes.data?.performance ?? []
+    statistics.value = statsRes.data?.statistics ?? null
+    dividends.value = divRes.data?.dividends ?? []
+    benchmark.value = benchRes.data?.benchmark ?? []
   } catch (err: any) {
     errorMsg.value = err?.response?.data?.message ?? 'Greska pri ucitavanju fonda.'
   } finally {
@@ -169,6 +181,51 @@ const chartOptions: ChartOptions<'line'> = {
   },
 }
 
+// Comparison chart: this fund rebased to 100 at the start of the shown window,
+// overlaid against the system-wide average fund index (also rebased to 100).
+const comparisonChartData = computed<ChartData<'line'>>(() => {
+  const perf = performance.value
+  const base = perf.length > 0 ? perf[0]!.fundValue : 0
+  const benchByDate = new Map(benchmark.value.map((b) => [b.date, b.indexValue]))
+  return {
+    labels: perf.map((p) => p.date),
+    datasets: [
+      {
+        label: 'Ovaj fond (index 100)',
+        data: perf.map((p) => (base > 0 ? (p.fundValue / base) * 100 : 100)),
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37,99,235,0.08)',
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.3,
+      },
+      {
+        label: 'Prosek svih fondova',
+        data: perf.map((p) => benchByDate.get(p.date) ?? null),
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,0.06)',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        tension: 0.3,
+        spanGaps: true,
+      },
+    ],
+  }
+})
+const comparisonChartOptions: ChartOptions<'line'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: true, position: 'bottom' }, tooltip: { enabled: true } },
+  scales: { x: { grid: { display: false } }, y: { ticks: { callback: (v: any) => Number(v).toFixed(0) } } },
+}
+
+const hasComparison = computed(() => performance.value.length > 1 && benchmark.value.length > 0)
+
+function fmtPct(v: number) {
+  return `${(v * 100).toFixed(2)} %`
+}
+
 onMounted(async () => {
   await load()
   await loadAccounts()
@@ -192,6 +249,7 @@ onMounted(async () => {
           <div class="kpi"><span>Profit</span><strong :class="fund.profitRSD >= 0 ? 'positive' : 'negative'">{{ fund.profitRSD.toFixed(2) }} RSD</strong></div>
           <div class="kpi"><span>Minimalni ulog</span><strong>{{ fund.minimalniUlog.toFixed(2) }} RSD</strong></div>
           <div class="kpi"><span>Ucesnika</span><strong>{{ fund.participantsCount }}</strong></div>
+          <div class="kpi"><span>Dividende</span><strong>{{ fund.dividendPolicy === 'payout' ? 'Isplata' : 'Reinvestiranje' }}</strong></div>
         </div>
         <div class="actions">
           <button class="btn-primary" @click="investOpen = true">Uplati u fond</button>
@@ -211,6 +269,26 @@ onMounted(async () => {
         <div class="chart-wrapper">
           <Line v-if="performance.length > 0" :data="chartData" :options="chartOptions" />
           <p v-else class="hint">Nema istorijskih podataka.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Statistika fonda</h2>
+        <div v-if="statistics?.available" class="kpi-grid">
+          <div class="kpi"><span>Godišnji prinos</span><strong :class="statistics.annualizedReturn >= 0 ? 'positive' : 'negative'">{{ fmtPct(statistics.annualizedReturn) }}</strong></div>
+          <div class="kpi"><span>Prinos/rizik</span><strong>{{ statistics.rewardToVariability.toFixed(2) }}</strong></div>
+          <div class="kpi"><span>Max drawdown</span><strong class="negative">{{ fmtPct(statistics.maxDrawdown) }}</strong></div>
+          <div class="kpi"><span>Volatilnost</span><strong>{{ fmtPct(statistics.volatility) }}</strong></div>
+          <div class="kpi"><span>Meseci podataka</span><strong>{{ statistics.monthsOfData }}</strong></div>
+        </div>
+        <p v-else class="hint">Nedovoljno istorijskih podataka za prikaz metrika (potrebno je više mesečnih snimaka).</p>
+      </section>
+
+      <section class="card">
+        <h2>Uporedni prikaz sa prosekom svih fondova</h2>
+        <div class="chart-wrapper">
+          <Line v-if="hasComparison" :data="comparisonChartData" :options="comparisonChartOptions" />
+          <p v-else class="hint">Nema dovoljno podataka za uporedni prikaz.</p>
         </div>
       </section>
 
@@ -239,6 +317,31 @@ onMounted(async () => {
           </tbody>
         </table>
         <p v-else class="hint">Fond jos uvek nema hartija.</p>
+      </section>
+
+      <section class="card">
+        <h2>Dividende fonda</h2>
+        <table v-if="dividends.length > 0" class="data-table">
+          <thead>
+            <tr>
+              <th>Datum</th><th>Period</th><th>Hartija</th>
+              <th class="num">Bruto (RSD)</th><th>Politika</th>
+              <th class="num">Reinvestirano</th><th class="num">Isplaćeno (RSD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in dividends" :key="d.id">
+              <td>{{ new Date(d.paidAt).toLocaleDateString('sr-RS') }}</td>
+              <td>{{ d.period }}</td>
+              <td><strong>{{ d.ticker }}</strong></td>
+              <td class="num">{{ d.grossRSD.toFixed(2) }}</td>
+              <td>{{ d.policy === 'payout' ? 'Isplata' : 'Reinvestiranje' }}</td>
+              <td class="num">{{ d.reinvestedShares > 0 ? `${d.reinvestedShares} kom (${d.reinvestedRSD.toFixed(2)})` : '—' }}</td>
+              <td class="num">{{ d.distributedRSD > 0 ? d.distributedRSD.toFixed(2) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="hint">Fond još uvek nije primio dividende.</p>
       </section>
     </template>
 
