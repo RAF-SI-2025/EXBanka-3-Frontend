@@ -19,6 +19,9 @@ import {
   type FundSummary,
   type FundHolding,
   type FundPerformancePoint,
+  type FundStatistics,
+  type FundDividend,
+  type FundDividendPolicy,
 } from '../api/fund'
 import { accountApi } from '../api/account'
 import { useAuthStore } from '../stores/auth'
@@ -34,6 +37,9 @@ const fund = ref<FundSummary | null>(null)
 const holdings = ref<FundHolding[]>([])
 const performance = ref<FundPerformancePoint[]>([])
 const granularity = ref<'monthly' | 'quarterly' | 'yearly'>('monthly')
+const statistics = ref<FundStatistics | null>(null)
+const dividends = ref<FundDividend[]>([])
+const policyBusy = ref(false)
 const loading = ref(false)
 const errorMsg = ref('')
 
@@ -52,14 +58,18 @@ async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const [fundRes, holdingsRes, perfRes] = await Promise.all([
+    const [fundRes, holdingsRes, perfRes, statsRes, divRes] = await Promise.all([
       fundApi.get(fundId.value),
       fundApi.holdings(fundId.value),
       fundApi.performance(fundId.value, granularity.value),
+      fundApi.statistics(fundId.value),
+      fundApi.dividends(fundId.value),
     ])
     fund.value = fundRes.data?.fund ?? null
     holdings.value = holdingsRes.data?.holdings ?? []
     performance.value = perfRes.data?.performance ?? []
+    statistics.value = statsRes.data?.statistics ?? null
+    dividends.value = divRes.data?.dividends ?? []
   } catch (err: any) {
     errorMsg.value = err?.response?.data?.message ?? 'Greska pri ucitavanju fonda.'
   } finally {
@@ -120,6 +130,23 @@ async function submitInvestForBank() {
   }
 }
 
+async function changeDividendPolicy(policy: FundDividendPolicy) {
+  if (!fund.value || fund.value.dividendPolicy === policy) return
+  policyBusy.value = true
+  try {
+    await fundApi.setDividendPolicy(fundId.value, policy)
+    fund.value.dividendPolicy = policy
+  } catch (err: any) {
+    errorMsg.value = err?.response?.data?.message ?? 'Greska pri promeni politike dividendi.'
+  } finally {
+    policyBusy.value = false
+  }
+}
+
+function fmtPct(v: number) {
+  return `${(v * 100).toFixed(2)} %`
+}
+
 const chartData = computed<ChartData<'line'>>(() => ({
   labels: performance.value.map((p) => p.date),
   datasets: [
@@ -173,7 +200,37 @@ onMounted(async () => {
           <button class="btn-primary" @click="investOpen = true">Uplati za banku</button>
           <button v-if="isManager" class="btn-secondary" @click="router.push('/securities')">Kupi hartiju za fond</button>
         </div>
+        <div class="policy-row">
+          <span class="policy-label">Politika dividendi:</span>
+          <template v-if="isManager">
+            <button
+              class="policy-btn"
+              :class="{ active: fund.dividendPolicy === 'reinvest' }"
+              :disabled="policyBusy"
+              @click="changeDividendPolicy('reinvest')"
+            >Reinvestiranje</button>
+            <button
+              class="policy-btn"
+              :class="{ active: fund.dividendPolicy === 'payout' }"
+              :disabled="policyBusy"
+              @click="changeDividendPolicy('payout')"
+            >Isplata klijentima</button>
+          </template>
+          <strong v-else>{{ fund.dividendPolicy === 'payout' ? 'Isplata klijentima' : 'Reinvestiranje' }}</strong>
+        </div>
       </header>
+
+      <section class="card">
+        <h2>Statistika fonda</h2>
+        <div v-if="statistics?.available" class="kpi-grid">
+          <div class="kpi"><span>Godišnji prinos</span><strong :class="statistics.annualizedReturn >= 0 ? 'positive' : 'negative'">{{ fmtPct(statistics.annualizedReturn) }}</strong></div>
+          <div class="kpi"><span>Prinos/rizik</span><strong>{{ statistics.rewardToVariability.toFixed(2) }}</strong></div>
+          <div class="kpi"><span>Max drawdown</span><strong class="negative">{{ fmtPct(statistics.maxDrawdown) }}</strong></div>
+          <div class="kpi"><span>Volatilnost</span><strong>{{ fmtPct(statistics.volatility) }}</strong></div>
+          <div class="kpi"><span>Meseci podataka</span><strong>{{ statistics.monthsOfData }}</strong></div>
+        </div>
+        <p v-else class="hint">Nedovoljno istorijskih podataka za prikaz metrika.</p>
+      </section>
 
       <section class="card">
         <div class="section-header">
@@ -215,6 +272,31 @@ onMounted(async () => {
         </table>
         <p v-else class="hint">Fond jos uvek nema hartija.</p>
       </section>
+
+      <section class="card">
+        <h2>Dividende fonda</h2>
+        <table v-if="dividends.length > 0" class="data-table">
+          <thead>
+            <tr>
+              <th>Datum</th><th>Period</th><th>Hartija</th>
+              <th class="num">Bruto (RSD)</th><th>Politika</th>
+              <th class="num">Reinvestirano</th><th class="num">Isplaćeno (RSD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in dividends" :key="d.id">
+              <td>{{ new Date(d.paidAt).toLocaleDateString('sr-RS') }}</td>
+              <td>{{ d.period }}</td>
+              <td><strong>{{ d.ticker }}</strong></td>
+              <td class="num">{{ d.grossRSD.toFixed(2) }}</td>
+              <td>{{ d.policy === 'payout' ? 'Isplata' : 'Reinvestiranje' }}</td>
+              <td class="num">{{ d.reinvestedShares > 0 ? `${d.reinvestedShares} kom (${d.reinvestedRSD.toFixed(2)})` : '—' }}</td>
+              <td class="num">{{ d.distributedRSD > 0 ? d.distributedRSD.toFixed(2) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="hint">Fond još uvek nije primio dividende.</p>
+      </section>
     </template>
 
     <!-- Invest-for-bank modal -->
@@ -253,6 +335,11 @@ onMounted(async () => {
 .kpi span { display: block; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
 .kpi strong { font-size: 18px; color: #0f172a; }
 .actions { display: flex; gap: 10px; }
+.policy-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.policy-label { color: #64748b; font-size: 13px; font-weight: 600; }
+.policy-btn { padding: 7px 14px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; color: #475569; font-weight: 600; font-size: 13px; cursor: pointer; }
+.policy-btn.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+.policy-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .section-header select { padding: 7px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
 .chart-wrapper { position: relative; height: 320px; }
