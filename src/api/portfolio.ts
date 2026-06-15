@@ -46,6 +46,28 @@ export interface PortfolioSummary {
   holdings: Holding[]
 }
 
+export interface DividendPayout {
+  id: number
+  assetId: number
+  ticker: string
+  accountId: number
+  quantity: number
+  pricePerShare: number
+  dividendYield: number
+  currency: string
+  grossAmount: number
+  creditedAmount: number
+  creditedCurrency: string
+  taxRSD: number
+  period: string
+  paidAt: string
+}
+
+export interface DividendsResult {
+  dividends: DividendPayout[]
+  count: number
+}
+
 // ---------------------------------------------------------------------------
 // Client-facing portfolio API
 // ---------------------------------------------------------------------------
@@ -74,6 +96,11 @@ export const clientPortfolioApi = {
       reservedQuantity: number
       availableForOtc: number
     }>(`/portfolio/holdings/${id}/public`, { publicQuantity }),
+
+  listDividends: (assetId?: number) =>
+    clientApi.get<DividendsResult>('/portfolio/dividends', {
+      params: { assetId: assetId || undefined },
+    }),
 }
 
 // ---------------------------------------------------------------------------

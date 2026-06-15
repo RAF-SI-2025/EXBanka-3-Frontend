@@ -68,6 +68,10 @@ function isPaymentSection() {
           OTC ponude
         </RouterLink>
 
+        <RouterLink v-if="canAccessMarket" to="/client/otc/negotiations" class="sidebar-sublink" :class="{ active: isActive('/client/otc/negotiations') }">
+          Istorija pregovora
+        </RouterLink>
+
         <RouterLink v-if="canAccessMarket" to="/client/otc/interbank" class="sidebar-sublink" :class="{ active: isActive('/client/otc/interbank') }">
           Cross-bank OTC
         </RouterLink>

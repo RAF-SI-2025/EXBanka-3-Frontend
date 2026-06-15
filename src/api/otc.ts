@@ -131,6 +131,37 @@ export interface ExerciseContractResponse {
   message?: string
 }
 
+export type OtcNegotiationAction =
+  | 'created'
+  | 'countered'
+  | 'accepted'
+  | 'declined'
+  | 'cancelled'
+
+export interface OtcNegotiationEntry {
+  id: number
+  offerId: number
+  action: OtcNegotiationAction
+  actorId: number
+  actorType: string
+  amount: number
+  pricePerStock: number
+  premium: number
+  settlementDate: string
+  prevAmount?: number
+  prevPricePerStock?: number
+  prevPremium?: number
+  prevSettlementDate?: string
+  createdAt: string
+}
+
+export interface NegotiationHistoryFilter {
+  status?: OtcOfferStatus
+  from?: string
+  to?: string
+  counterparty?: number
+}
+
 export const otcApi = {
   listPublicStocks: () =>
     clientApi.get<{ stocks: PublicOtcStock[]; count: number }>('/otc/public-stocks'),
@@ -165,4 +196,19 @@ export const otcApi = {
 
   getSagaStatus: (sagaId: number) =>
     clientApi.get<{ saga: SagaTransaction }>(`/otc/saga/${sagaId}`),
+
+  listNegotiations: (filter: NegotiationHistoryFilter = {}) =>
+    clientApi.get<{ negotiations: OtcOffer[]; count: number; status: string }>('/otc/negotiations', {
+      params: {
+        status: filter.status || undefined,
+        from: filter.from || undefined,
+        to: filter.to || undefined,
+        counterparty: filter.counterparty || undefined,
+      },
+    }),
+
+  getNegotiationHistory: (offerId: number) =>
+    clientApi.get<{ offer: OtcOffer; entries: OtcNegotiationEntry[]; count: number }>(
+      `/otc/offers/${offerId}/history`,
+    ),
 }

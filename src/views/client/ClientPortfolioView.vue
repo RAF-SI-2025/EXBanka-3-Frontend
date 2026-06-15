@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useClientPortfolioStore } from '../../stores/portfolio'
 import { useClientAuthStore } from '../../stores/clientAuth'
-import { clientPortfolioApi, type Holding } from '../../api/portfolio'
+import { clientPortfolioApi, type Holding, type DividendPayout } from '../../api/portfolio'
 import { clientTaxApi, type TaxSummary } from '../../api/tax'
 import { clientOrderApi, type Order } from '../../api/order'
 import { clientAccountApi, type ClientAccountItem } from '../../api/clientAccount'
@@ -104,6 +104,29 @@ function formatOrderDate(iso: string) {
   const d = new Date(iso)
   return d.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+
+// Dividend history section
+const dividends = ref<DividendPayout[]>([])
+const dividendsError = ref('')
+
+async function fetchDividends() {
+  try {
+    const res = await clientPortfolioApi.listDividends()
+    dividends.value = res.data.dividends || []
+  } catch {
+    dividendsError.value = 'Nije moguće učitati istoriju dividendi.'
+  }
+}
+
+const totalDividendsByCurrency = computed(() => {
+  const totals: Record<string, number> = {}
+  for (const d of dividends.value) {
+    totals[d.creditedCurrency] = (totals[d.creditedCurrency] || 0) + d.creditedAmount
+  }
+  return Object.entries(totals)
+    .map(([currency, amount]) => `${formatAmount(amount)} ${currency}`)
+    .join(' · ')
+})
 
 const sortedHoldings = computed(() =>
   [...portfolioStore.holdings].sort((a, b) => b.marketValue - a.marketValue || a.assetTicker.localeCompare(b.assetTicker))
@@ -206,6 +229,7 @@ onMounted(() => {
   fetchTaxSummary()
   fetchBuyOrders()
   fetchClientAccountsForOrders()
+  fetchDividends()
 })
 </script>
 
@@ -333,6 +357,49 @@ onMounted(() => {
             <span>Plaćeno ove godine</span>
             <strong>{{ formatAmount(taxSummary.paid_this_year) }} RSD</strong>
           </div>
+        </div>
+      </section>
+
+      <!-- Dividend history -->
+      <section class="panel dividend-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Isplaćene dividende</h2>
+            <span class="panel-meta">Kvartalne isplate dividendi po pozicijama, najnovije prvo.</span>
+          </div>
+          <span class="panel-meta" v-if="dividends.length">Ukupno: {{ totalDividendsByCurrency }}</span>
+        </div>
+        <div v-if="dividendsError" class="error-box" style="margin:0">{{ dividendsError }}</div>
+        <div v-else-if="!dividends.length" class="empty-inline">Još uvek nema isplaćenih dividendi.</div>
+        <div v-else class="buy-history-wrap">
+          <table class="portfolio-table buy-history-table">
+            <thead>
+              <tr>
+                <th>Datum</th>
+                <th>Period</th>
+                <th>Akcija</th>
+                <th>Količina</th>
+                <th>Cena</th>
+                <th>Prinos</th>
+                <th>Bruto</th>
+                <th>Uplaćeno</th>
+                <th>Porez (RSD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in dividends" :key="d.id">
+                <td>{{ formatOrderDate(d.paidAt) }}</td>
+                <td>{{ d.period }}</td>
+                <td class="ticker">{{ d.ticker }}</td>
+                <td>{{ formatQuantity(d.quantity) }}</td>
+                <td>{{ formatAmount(d.pricePerShare) }} {{ d.currency }}</td>
+                <td>{{ (d.dividendYield * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}%</td>
+                <td>{{ formatAmount(d.grossAmount) }} {{ d.currency }}</td>
+                <td class="positive">{{ formatAmount(d.creditedAmount) }} {{ d.creditedCurrency }}</td>
+                <td>{{ d.taxRSD > 0 ? formatAmount(d.taxRSD) : '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -755,7 +822,8 @@ onMounted(() => {
   color: #0f172a;
 }
 
-.buy-history-panel {
+.buy-history-panel,
+.dividend-panel {
   margin-top: 24px;
 }
 
